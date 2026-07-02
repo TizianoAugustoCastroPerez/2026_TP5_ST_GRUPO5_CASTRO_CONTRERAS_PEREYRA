@@ -1,0 +1,182 @@
+// 5LC Grupo 5: Castro, Contreras y Pereyra
+
+#define ENABLE_USER_AUTH
+#define ENABLE_DATABASE
+#include <Arduino.h>           // Arduino
+#include <WiFi.h>              // WiFi
+#include <WiFiClientSecure.h>  // WIFi
+#include <FirebaseClient.h>    // Firebase
+#include <DHT.h>               // Sensor Temperatura
+#include <Wire.h>              // Pantalla
+#include <Adafruit_GFX.h>      // Pantalla
+#include <Adafruit_SSD1306.h>  // Pantalla
+#include "time.h"
+
+// Defines OLED
+#define ANCHO 128
+#define ALTO 64
+Adafruit_SSD1306 display(ANCHO, ALTO, &Wire, -1);
+
+// Defines DHT
+#define DHTPIN 23
+#define DHTTYPE DHT11
+DHT dht(DHTPIN, DHTTYPE);
+
+// Defines botones y led
+#define B1 35
+#define B2 34
+#define ESPERA_PULSO 30
+#define PARAMETRO_MILLIS 5000
+#define pin_LED 26
+
+// Defines WiFi y Firebase
+#define WIFI_SSID "MECA-IoT-V2"
+#define WIFI_PASSWORD "IoT$2026"
+#define Web_API_KEY "AIzaSyCH4JHEIY6q4jOC7b9Yy7K535pbN3zQesg"
+#define DATABASE_URL "https://tp-5-st-grupo-5-default-rtdb.europe-west1.firebasedatabase.app/"
+#define USER_EMAIL "tizianoacp08@gmail.com"
+#define USER_PASS "Tiziano2008"
+
+// User functions
+void processData(AsyncResult &aResult);
+
+// Autenticación
+UserAuth user_auth(Web_API_KEY, USER_EMAIL, USER_PASS);
+
+// Partes de Firebase
+FirebaseApp app;
+WiFiClientSecure ssl_client;
+using AsyncClient = AsyncClientClass;
+AsyncClient aClient(ssl_client);
+RealtimeDatabase Database;
+
+// Variables botones y tiempo
+unsigned long tiempoPulso; // Controla específicamente los tiempos de las pulsaciones
+bool primerPulso; // Controla si ocurrió el primer pulso
+unsigned long desfasaje; // controla los reinicios de tiempo
+int tiempoMillis; // Contador principal de la máquina de estados
+unsigned long lastSendTime = 0; // Último envío
+const unsigned long sendInterval = 10000; // 10 segundos
+
+// Variable to save USER UID
+String uid;
+
+// Database main path (to be updated in setup with the user UID)
+String databasePath;
+// Database child nodes
+String tempPath = "/temperature";
+String timePath = "/timestamp";
+
+// Parent Node (to be updated in every loop)
+String parentPath;
+
+int timestamp;
+
+const char* ntpServer = "pool.ntp.org";
+
+// Create JSON objects for storing data
+object_t jsonData, obj1, obj2, obj3, obj4;
+JsonWriter writer;
+
+// Function that gets current epoch time
+unsigned long getTime() {
+  time_t now;
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    //Serial.println("Failed to obtain time");
+    return(0);
+  }
+  time(&now);
+  return now;
+}
+
+void setup(){
+  Serial.begin(115200);
+
+  // LED Y BOTONES
+  pinMode(pin_LED, OUTPUT);
+  pinMode(B1, INPUT);
+  pinMode(B2, INPUT);
+
+  // DHT
+  dht.begin();
+
+  // OLED
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+
+  // WIFI
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.print("Connecting to WiFi ..");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print('.');
+    delay(1000);
+  }
+
+  // TIEMPO
+  configTime(0, 0, ntpServer);
+
+  // CLIENTE SSL
+  ssl_client.setInsecure();
+  ssl_client.setConnectionTimeout(1000);
+  ssl_client.setHandshakeTimeout(5);
+
+  // INICIOFIREBASE
+  initializeApp(aClient, app, getAuth(user_auth), processData, "🔐 authTask");
+  app.getApp<RealtimeDatabase>(Database);
+  Database.url(DATABASE_URL);
+}
+
+void loop(){
+  // Maintain authentication and async tasks
+  app.loop();
+
+  // Check if authentication is ready
+  if (app.ready()){
+
+    // Periodic data sending every 10 seconds
+    unsigned long currentTime = millis();
+    if (currentTime - lastSendTime >= sendInterval){
+      // Update the last send time
+      lastSendTime = currentTime;
+
+      uid = app.getUid().c_str();
+
+      // Update database path
+      databasePath = "/UsersData/" + uid + "/readings";
+
+      //Get current timestamp
+      timestamp = getTime();
+      Serial.print ("time: ");
+      Serial.println (timestamp);
+
+      parentPath= databasePath + "/" + String(timestamp);
+
+      // Temperatura
+      temperature = dht.readTemperature();
+
+      // Create a JSON object with the data
+      writer.create(obj1, tempPath, temperature);
+      writer.create(obj2, timePath, timestamp);
+      writer.join(jsonData, 4, obj1, obj2);
+
+      Database.set<object_t>(aClient, parentPath, jsonData, processData, "RTDB_Send_Data");
+    }
+  }
+}
+
+void processData(AsyncResult &aResult){
+  if (!aResult.isResult())
+    return;
+
+  if (aResult.isEvent())
+    Firebase.printf("Event task: %s, msg: %s, code: %d\n", aResult.uid().c_str(), aResult.eventLog().message().c_str(), aResult.eventLog().code());
+
+  if (aResult.isDebug())
+    Firebase.printf("Debug task: %s, msg: %s\n", aResult.uid().c_str(), aResult.debug().c_str());
+
+  if (aResult.isError())
+    Firebase.printf("Error task: %s, msg: %s, code: %d\n", aResult.uid().c_str(), aResult.error().message().c_str(), aResult.error().code());
+
+  if (aResult.available())
+    Firebase.printf("task: %s, payload: %s\n", aResult.uid().c_str(), aResult.c_str());
+}
