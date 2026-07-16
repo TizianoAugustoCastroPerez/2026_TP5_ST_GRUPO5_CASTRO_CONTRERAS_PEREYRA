@@ -98,9 +98,9 @@ object_t jsonData, obj1, obj2;
 JsonWriter writer;
 
 // Función que obtiene el Epoch time (tiempo pasado desde cierto momento específico)
-unsigned long obtenerTiempo() {
+unsigned long obtenerTiempo() { // Unsigned long, se guarda como un valor numérico muy grande
   time_t ahora; // Se crea una variable llamada ahora del tipo time_t
-  struct tm timeinfo; // Estructura que guarda la hora en año, meses, días, horas, minutos y segundos
+  struct tm timeinfo; // Estructura que guarda la hora en año, meses, días, horas, minutos y segundos, para verificar que los tiempos estén sincroonizados
   if (!getLocalTime(&timeinfo)) {
     return(0);
   } // Se verifica si el ESP32 conoce la hora y en ese caso la guarda en timeinfo, en resumen se usa para verificar que los tiempos estén sincronizados
@@ -108,18 +108,18 @@ unsigned long obtenerTiempo() {
   return ahora;
 } // Si no se obtiene el tiempo no devuelve nada
 
-String obtenerTiempoReal() {
-  struct tm timeinfo;
+// Función que obtiene el tiempo real
+String obtenerTiempoReal() { // String, se guarda como texto
+  struct tm timeinfo; // Variable de tipo struct tm llamada timeInfo
 
   if (!getLocalTime(&timeinfo)) {
     return "Sin hora"; // Como es una función String, no puede devolver 0, debe devolver un String
-  }
+  } // Se verifica si el ESP32 conoce la hora y en ese caso la guarda en timeinfo, en resumen se usa para verificar que los tiempos estén sincronizados
 
-  char buffer[25];
-
-  strftime(buffer, sizeof(buffer), "%d/%m/%Y %H:%M:%S", &timeinfo);
+  char buffer[25]; // Se crea una línea de caracteres llamada buffer, que guarda el tiempo real como un texto
+  strftime(buffer, sizeof(buffer), "%d/%m/%Y %H:%M:%S", &timeinfo); // Con la función strftime se guarda en buffer el tiempo real
   return String(buffer);
-}
+} // Si no se obtiene el tiempo real se manda un String avisando
 
 void setup(){
   Serial.begin(115200);
