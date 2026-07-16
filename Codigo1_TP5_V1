@@ -144,7 +144,7 @@ void setup(){
   }
 
   // TIEMPO
-  configTime(-10800, 0, ntpServer); // Se obtiene el tiempo real. Como en Firebase elegimos la zona horaria belga (UTC +1), usamos la misma acá, para eso el 3600, suma 1 hora
+  configTime(-10800, 0, ntpServer); // Se obtiene el tiempo real. Usamos la zona horaria de Argentina (UTC - 3), por eso el -10800
 
   // CLIENTE SSL
   ssl_client.setInsecure(); // Con esto no se verifica la conexión con Firebase, ya que sabemos que va a ser correcta, por lo que se ahorra tiempo
