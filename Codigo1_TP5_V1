@@ -88,6 +88,7 @@ String parentPath;
 
 // La variable timestamp guarda el momento exacto en el que ocurrió algo, en este caso la lectura de la temperatura
 int timestamp;
+String tiempoReal;
 
 // De acá saca su valor timestamp
 const char* ntpServer = "pool.ntp.org";
@@ -106,6 +107,19 @@ unsigned long obtenerTiempo() {
   time(&ahora); // Ahora si, ya verificada la sincronización, se devuelve el valor de la hora en Epoch time
   return ahora;
 } // Si no se obtiene el tiempo no devuelve nada
+
+String obtenerTiempoReal() {
+  struct tm timeinfo;
+
+  if (!getLocalTime(&timeinfo)) {
+    return "Sin hora"; // Como es una función String, no puede devolver 0, debe devolver un String
+  }
+
+  char buffer[25];
+
+  strftime(buffer, sizeof(buffer), "%d/%m/%Y %H:%M:%S", &timeinfo);
+  return String(buffer);
+}
 
 void setup(){
   Serial.begin(115200);
@@ -130,7 +144,7 @@ void setup(){
   }
 
   // TIEMPO
-  configTime(3600, 0, ntpServer); // Se obtiene el tiempo real. Como en Firebase elegimos la zona horaria belga (UTC +1), usamos la misma acá, para eso el 3600, suma 1 hora
+  configTime(-10800, 0, ntpServer); // Se obtiene el tiempo real. Como en Firebase elegimos la zona horaria belga (UTC +1), usamos la misma acá, para eso el 3600, suma 1 hora
 
   // CLIENTE SSL
   ssl_client.setInsecure(); // Con esto no se verifica la conexión con Firebase, ya que sabemos que va a ser correcta, por lo que se ahorra tiempo
@@ -161,8 +175,9 @@ void loop(){
       // Actualizar la ruta principal, ahora tiene un valor definido
       databasePath = "/UsersData/" + uid + "/readings";
 
-      // Se obtiene el Epoch time con la función getTime
+      // Se obtiene el Epoch time con la función obtenerTiempo y la hora en tiempo real con obtenerTiempoReal
       timestamp = obtenerTiempo();
+      tiempoReal = obtenerTiempoReal();
 
       // Actualizar la ruta padre, ahora tiene un valor definido
       parentPath= databasePath + "/" + String(timestamp);
@@ -172,7 +187,7 @@ void loop(){
 
       // Se crean primero 2 objetos, el primero con la ruta y el valor de la temperatura, y el segundo con la ruta y el valor del tiempo
       writer.create(obj1, tempPath, temperatura);
-      writer.create(obj2, timePath, timestamp);
+      writer.create(obj2, timePath, tiempoReal);
       writer.join(jsonData, 2, obj1, obj2); // Con .join unimos los objetos Json en una sola estructura
 
       Database.set<object_t>(aClient, parentPath, jsonData, processData, "enviarDatosAFirebase");
